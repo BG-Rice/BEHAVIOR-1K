@@ -489,19 +489,18 @@ class OmniPBRMaterialPrim(MaterialPrim):
 
     def enable_highlight(self, highlight_color, highlight_intensity):
         """
-        Enables highlight for this material with the specified color and intensity.
-
-        Args:
-            highlight_color (3-array): Color of the highlight in (R,G,B)
-            highlight_intensity (float): Intensity of the highlight
+        Replace diffuse color with highlight color (saves original for restore).
+        Diffuse changes are not temporally accumulated by the RTX denoiser,
+        so the highlight appears and disappears in one frame.
         """
-        # Set emissive properties to enable highlight
-        self.set_input(inp="enable_emission", val=True)
-        self.set_input(inp="emissive_color", val=lazy.pxr.Gf.Vec3f(*highlight_color))
-        self.set_input(inp="emissive_intensity", val=highlight_intensity)
+        if getattr(self, "_saved_diffuse_color", None) is None:
+            self._saved_diffuse_color = self.diffuse_color_constant
+        self.diffuse_color_constant = th.tensor(highlight_color, dtype=th.float32)
 
     def disable_highlight(self):
-        self.set_input(inp="enable_emission", val=False)
+        if getattr(self, "_saved_diffuse_color", None) is not None:
+            self.diffuse_color_constant = self._saved_diffuse_color
+            self._saved_diffuse_color = None
 
 
 class VRayMaterialPrim(MaterialPrim):
@@ -572,19 +571,18 @@ class VRayMaterialPrim(MaterialPrim):
 
     def enable_highlight(self, highlight_color, highlight_intensity):
         """
-        Enables highlight for this material with the specified color and intensity.
-
-        Args:
-            highlight_color (3-array): Color of the highlight in (R,G,B)
-            highlight_intensity (float): Intensity of the highlight
+        Replace diffuse_tint with highlight color (saves original for restore).
+        Diffuse changes are not temporally accumulated by the RTX denoiser,
+        so the highlight appears and disappears in one frame.
         """
-        # Set emissive properties to enable highlight
-        self.set_input(inp="emission_color", val=lazy.pxr.Gf.Vec3f(*highlight_color))
-        self.set_input(inp="emission_intensity", val=highlight_intensity)
+        if getattr(self, "_saved_diffuse_tint", None) is None:
+            self._saved_diffuse_tint = self.diffuse_tint
+        self.diffuse_tint = th.tensor(highlight_color, dtype=th.float32)
 
     def disable_highlight(self):
-        self.set_input(inp="emission_color", val=lazy.pxr.Gf.Vec3f(0, 0, 0))
-        self.set_input(inp="emission_intensity", val=0.0)
+        if getattr(self, "_saved_diffuse_tint", None) is not None:
+            self.diffuse_tint = self._saved_diffuse_tint
+            self._saved_diffuse_tint = None
 
 
 class OmniGlassMaterialPrim(MaterialPrim):

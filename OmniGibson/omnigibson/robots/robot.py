@@ -78,7 +78,7 @@ m.MIN_AG_DEFAULT_GRASP_POINT_PROP = 0.2
 m.MAX_AG_DEFAULT_GRASP_POINT_PROP = 0.95
 m.AG_DEFAULT_GRASP_POINT_Z_PROP = 0.4
 m.CONSTRAINT_VIOLATION_THRESHOLD = 0.1
-m.GRASP_WINDOW = 0.3
+m.GRASP_WINDOW = 0.05
 m.RELEASE_WINDOW = 1 / 30.0
 m.MAX_LINEAR_VELOCITY = 1.5
 m.MAX_ANGULAR_VELOCITY = th.pi
@@ -1095,7 +1095,8 @@ class Robot(USDObject, GymObservable):
                     loaded_ag_constraint["target_obj"] = self.scene.object_registry(
                         "name", loaded_ag_constraint["target_obj"]
                     )
-                    assert loaded_ag_constraint["target_obj"] is not None, "Target object not found in scene"
+                    if loaded_ag_constraint["target_obj"] is None:
+                        loaded_ag_constraint = None
 
                 # Release existing grasp if needed
                 should_release = False

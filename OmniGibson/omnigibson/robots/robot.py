@@ -2483,6 +2483,7 @@ class Robot(USDObject, GymObservable):
             gripper_pj_configs = self._default_gripper_multi_finger_controller_configs
             gripper_joint_configs = self._default_gripper_joint_controller_configs
             gripper_null_configs = self._default_gripper_null_controller_configs
+            tool_joint_configs = self._default_tool_joint_controller_configs
 
             # Add arm and gripper defaults, per arm
             for arm in self.arm_names:
@@ -2497,6 +2498,11 @@ class Robot(USDObject, GymObservable):
                     gripper_joint_configs[arm]["name"]: gripper_joint_configs[arm],
                     gripper_null_configs[arm]["name"]: gripper_null_configs[arm],
                 }
+                # Add end-effector tool servo defaults only for arms that define tool joints
+                if arm in tool_joint_configs:
+                    cfg["tool_{}".format(arm)] = {
+                        tool_joint_configs[arm]["name"]: tool_joint_configs[arm],
+                    }
         if self.is_locomotion:
             # Add supported base controllers
             cfg["base"] = {
@@ -2582,6 +2588,8 @@ class Robot(USDObject, GymObservable):
             for arm in self.arm_names:
                 controllers["arm_{}".format(arm)] = "JointController"
                 controllers["gripper_{}".format(arm)] = "JointController"
+                if self.tool_joint_names.get(arm):
+                    controllers["tool_{}".format(arm)] = "JointController"
         if self.is_locomotion:
             controllers["base"] = "JointController"
         if self.is_holonomic_base:
@@ -2782,6 +2790,22 @@ class Robot(USDObject, GymObservable):
         return {}
 
     @cached_property
+    def tool_joint_names(self):
+        """
+        Returns:
+            dict: Dictionary mapping arm appendage name to array of joint names corresponding to
+                this robot's end-effector tool servos (e.g. spoon twirl / scoop). Empty if the
+                robot defines no tool joints.
+
+                Note: the ordering within the dictionary is assumed to be intentional, and is
+                directly used to define the set of corresponding control idxs.
+        """
+        assert self.is_manipulation
+        if self._definition.manipulation and self._definition.manipulation.tool_joint_names:
+            return self._definition.manipulation.tool_joint_names
+        return {}
+
+    @cached_property
     def arm_control_idx(self):
         """
         Returns:
@@ -2808,6 +2832,21 @@ class Robot(USDObject, GymObservable):
         return {
             arm: th.tensor([list(self.joints.keys()).index(name) for name in self.finger_joint_names[arm]])
             for arm in self.arm_names
+        }
+
+    @cached_property
+    def tool_control_idx(self):
+        """
+        Returns:
+            dict: Dictionary mapping arm appendage name to indices in low-level control
+                vector corresponding to end-effector tool joints (e.g. spoon twirl / scoop).
+                Only includes arms that define tool joints.
+        """
+        assert self.is_manipulation
+        return {
+            arm: th.tensor([list(self.joints.keys()).index(name) for name in self.tool_joint_names[arm]])
+            for arm in self.arm_names
+            if self.tool_joint_names.get(arm)
         }
 
     @cached_property
@@ -3444,6 +3483,32 @@ class Robot(USDObject, GymObservable):
                 "motor_type": "velocity",
                 "control_limits": self.control_limits,
                 "dof_idx": self.gripper_control_idx[arm],
+                "command_output_limits": "default",
+                "use_delta_commands": False,
+                "use_impedances": False,
+            }
+        return dic
+
+    @property
+    def _default_tool_joint_controller_configs(self):
+        """
+        Returns:
+            dict: Dictionary mapping arm appendage name to default tool joint controller config
+                to control this robot's end-effector tool servos (e.g. spoon twirl / scoop).
+                Only includes arms that define tool joints.
+        """
+        assert self.is_manipulation
+        dic = {}
+        for arm in self.arm_names:
+            if not self.tool_joint_names.get(arm):
+                continue
+            dic[arm] = {
+                "name": "JointController",
+                "control_freq": self._control_freq,
+                "motor_type": "velocity",
+                "control_limits": self.control_limits,
+                "dof_idx": self.tool_control_idx[arm],
+                "command_input_limits": [-math.pi, math.pi],
                 "command_output_limits": "default",
                 "use_delta_commands": False,
                 "use_impedances": False,

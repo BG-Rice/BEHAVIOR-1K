@@ -34,6 +34,7 @@ class ManipulationDefinition:
     eef_link_names: Optional[Dict[str, str]] = None
     finger_link_names: Optional[Dict[str, List[str]]] = None
     finger_joint_names: Optional[Dict[str, List[str]]] = None
+    tool_joint_names: Optional[Dict[str, List[str]]] = None
     gripper_link_names: Optional[Dict[str, List[str]]] = None
     arm_workspace_range: Optional[Dict[str, List[Any]]] = None
     teleop_rotation_offset: Optional[Dict[str, List[Any]]] = None

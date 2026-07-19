@@ -58,6 +58,7 @@ class InverseKinematicsController(JointController, ManipulationController):
         smoothing_filter_size=None,
         workspace_pose_limiter=None,
         condition_on_current_position=True,
+        hold_goal_on_zero_command=False,
         link_name=None,
     ):
         """
@@ -136,6 +137,7 @@ class InverseKinematicsController(JointController, ManipulationController):
         self.workspace_pose_limiter = workspace_pose_limiter
         self.reset_joint_pos = reset_joint_pos[dof_idx]
         self.condition_on_current_position = condition_on_current_position
+        self.hold_goal_on_zero_command = hold_goal_on_zero_command
 
         self._link_name = link_name  # eef/trunk link name (same for all members in the group)
         self._fixed_quat_targets = []  # per-member fixed quat target for position_fixed_ori mode
@@ -232,6 +234,20 @@ class InverseKinematicsController(JointController, ManipulationController):
         """
         prim_path = self._articulation_root_paths[controller_idx]
         link_name = self._link_name
+
+        # Zero delta command: keep holding the previously anchored goal instead of
+        # re-anchoring to the current (possibly gravity-sagged) pose, which would
+        # ratchet the sag into a slow drift
+        if (
+            self.hold_goal_on_zero_command
+            and self.mode not in ("absolute_pose", "pose_absolute_ori")
+            and cb.item_bool(self._goal_set[controller_idx])
+            and bool(cb.all(command == 0.0))
+        ):
+            return dict(
+                target_pos=cb.copy(self._goals["target_pos"][controller_idx]),
+                target_ori_mat=cb.copy(self._goals["target_ori_mat"][controller_idx]),
+            )
 
         # Get current EEF pose relative to robot base
         pos_relative, quat_relative = ControllableObjectViewAPI.get_link_relative_position_orientation(
